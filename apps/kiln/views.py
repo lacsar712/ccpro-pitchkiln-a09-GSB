@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
@@ -8,9 +10,20 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 
-from .forms import OpenCookRunForm, PhaseChangeForm, ResinLotForm, SoftPointProbeForm
+from .forms import (
+    DrawingWeighForm,
+    OpenCookRunForm,
+    PhaseChangeForm,
+    ResinLotForm,
+    SoftPointProbeForm,
+)
 from .models import CookRun, FireHearth, ResinLot
-from .services.floor_rules import change_hearth_phase
+from .services.floor_rules import (
+    change_hearth_phase,
+    close_half_kg,
+    close_run_to_cold,
+    weigh_total_kg,
+)
 
 
 def _wants_htmx(request):
@@ -48,12 +61,21 @@ def _board_context():
 def _drawer_context(hearth):
     open_run = hearth.open_run()
     probes = []
+    weighs = []
+    weigh_total = Decimal("0.00")
+    weigh_half = None
     if open_run:
         probes = list(open_run.probes.order_by("-sampledAt", "-id"))
+        weighs = list(open_run.weighs.all())
+        weigh_total = weigh_total_kg(open_run)
+        weigh_half = close_half_kg(open_run)
     return {
         "hearth": hearth,
         "open_run": open_run,
         "probes": probes,
+        "weighs": weighs,
+        "weigh_total": weigh_total,
+        "weigh_half": weigh_half,
         "phase_form": PhaseChangeForm(hearth=hearth),
         "probe_form": SoftPointProbeForm() if open_run else None,
         "open_run_form": OpenCookRunForm(hearth=hearth) if open_run is None else None,
@@ -173,15 +195,11 @@ def open_run(request, pk):
 @require_POST
 def close_run(request, pk):
     hearth = get_object_or_404(FireHearth, pk=pk)
-    open_run = hearth.open_run()
-    if open_run is None:
-        messages.error(request, "没有进行中的值守可收灶")
-    else:
-        open_run.closedAt = timezone.now()
-        open_run.save(update_fields=["closedAt"])
-        hearth.phase = FireHearth.PHASE_COLD
-        hearth.save(update_fields=["phase"])
+    try:
+        close_run_to_cold(hearth)
         messages.success(request, "值守已收灶，灶台回冷灶")
+    except ValidationError as exc:
+        messages.error(request, "；".join(exc.messages))
 
     if _wants_htmx(request):
         hearth.refresh_from_db()
@@ -189,6 +207,67 @@ def close_run(request, pk):
         resp["HX-Trigger"] = "floor-refresh"
         return resp
     return redirect(f"/?hearth={pk}")
+
+
+@login_required
+def weigh_desk(request):
+    """出胶称重台：列出全部出胶相位灶台，登记称重并展示累计口径。"""
+    hearths = (
+        FireHearth.objects.filter(phase=FireHearth.PHASE_DRAWING)
+        .prefetch_related(
+            Prefetch(
+                "runs",
+                queryset=CookRun.objects.filter(closedAt__isnull=True)
+                .select_related("resinLot")
+                .prefetch_related("weighs"),
+                to_attr="open_runs_cache",
+            )
+        )
+        .order_by("lane", "tag")
+    )
+    cards = []
+    for hearth in hearths:
+        run = hearth.open_runs_cache[0] if hearth.open_runs_cache else None
+        if run is None:
+            continue
+        total = weigh_total_kg(run)
+        cards.append(
+            {
+                "hearth": hearth,
+                "run": run,
+                "total": total,
+                "remaining": run.resinLot.arrivalKg - total,
+                "half": close_half_kg(run),
+                "weighs": list(run.weighs.all()),
+                "form": DrawingWeighForm(),
+            }
+        )
+    return render(request, "floor/weigh_desk.html", {"cards": cards})
+
+
+@login_required
+@require_POST
+def add_weigh(request, pk):
+    hearth = get_object_or_404(FireHearth, pk=pk)
+    form = DrawingWeighForm(request.POST, hearth=hearth)
+    if form.is_valid():
+        run = hearth.open_run()
+        if run is None:
+            messages.error(request, "该灶没有进行中的值守，无法登记称重")
+        else:
+            weigh = form.save(commit=False)
+            weigh.run = run
+            weigh.save()
+            messages.success(
+                request,
+                f"{hearth.tag} 已登记称重 {weigh.netKg} kg，"
+                f"累计 {weigh_total_kg(run)} kg",
+            )
+    else:
+        for errs in form.errors.values():
+            for err in errs:
+                messages.error(request, err)
+    return redirect("weigh_desk")
 
 
 @login_required

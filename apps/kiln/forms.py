@@ -1,8 +1,8 @@
 from django import forms
 from django.utils import timezone
 
-from .models import CookRun, FireHearth, ResinLot, SoftPointProbe
-from .services.floor_rules import assert_can_enter_drawing
+from .models import CookRun, DrawingWeigh, FireHearth, ResinLot, SoftPointProbe
+from .services.floor_rules import assert_can_enter_drawing, assert_can_weigh
 
 
 class ResinLotForm(forms.ModelForm):
@@ -73,6 +73,46 @@ class SoftPointProbeForm(forms.ModelForm):
         ]
         if not self.is_bound and not (self.instance and self.instance.pk):
             self.initial["sampledAt"] = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
+
+
+class DrawingWeighForm(forms.ModelForm):
+    class Meta:
+        model = DrawingWeigh
+        fields = ["weighedAt", "netKg", "weigherName"]
+        widgets = {
+            "weighedAt": forms.DateTimeInput(
+                attrs={"class": "field", "type": "datetime-local"},
+                format="%Y-%m-%dT%H:%M",
+            ),
+            "netKg": forms.NumberInput(
+                attrs={"class": "field", "step": "0.01", "min": "0.01"}
+            ),
+            "weigherName": forms.TextInput(attrs={"class": "field"}),
+        }
+
+    def __init__(self, *args, hearth=None, **kwargs):
+        self.hearth = hearth
+        super().__init__(*args, **kwargs)
+        self.fields["weighedAt"].input_formats = [
+            "%Y-%m-%dT%H:%M",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M",
+        ]
+        if not self.is_bound and not (self.instance and self.instance.pk):
+            self.initial["weighedAt"] = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
+
+    def clean_netKg(self):
+        net = self.cleaned_data["netKg"]
+        if net is not None and net <= 0:
+            raise forms.ValidationError("净重须为正。")
+        return net
+
+    def clean(self):
+        cleaned = super().clean()
+        net = cleaned.get("netKg")
+        if self.hearth is not None and net is not None:
+            assert_can_weigh(self.hearth, net)
+        return cleaned
 
 
 class OpenCookRunForm(forms.ModelForm):

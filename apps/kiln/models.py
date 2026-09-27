@@ -1,3 +1,6 @@
+from decimal import Decimal
+
+from django.core.validators import MinValueValidator
 from django.db import models
 
 
@@ -107,3 +110,30 @@ class SoftPointProbe(models.Model):
 
     def __str__(self):
         return f"{self.softPointC}℃ by {self.samplerName}"
+
+
+class DrawingWeigh(models.Model):
+    """出胶称重：登记在灶台当前未收灶的值守上（所属灶台 = run.hearth）。"""
+
+    run = models.ForeignKey(
+        CookRun,
+        on_delete=models.CASCADE,
+        related_name="weighs",
+        verbose_name="值守",
+    )
+    weighedAt = models.DateTimeField("称重时刻")
+    netKg = models.DecimalField(
+        "净重(kg)",
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    weigherName = models.CharField("司秤人", max_length=80)
+
+    class Meta:
+        ordering = ["-weighedAt", "-id"]
+        verbose_name = "出胶称重"
+        verbose_name_plural = "出胶称重"
+
+    def __str__(self):
+        return f"{self.netKg}kg by {self.weigherName}"

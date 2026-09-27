@@ -25,6 +25,30 @@
       {% csrf_token %}
       <button type="submit" class="btn-ghost">收灶回冷灶</button>
     </form>
+    {% if hearth.phase == "drawing" %}
+    <p class="hint">出胶灶收灶联锁：须至少一条称重，且累计净重 ≥ 到货量一半。</p>
+    {% endif %}
+  </section>
+
+  <section class="drawer-block">
+    <h3>出胶称重</h3>
+    <dl class="kv">
+      <dt>累计净重</dt><dd class="mono">{{ weigh_total }} kg</dd>
+      <dt>到货量</dt><dd class="mono">{{ open_run.resinLot.arrivalKg }} kg</dd>
+      <dt>半额口径</dt><dd class="mono">{{ weigh_half }} kg</dd>
+    </dl>
+    <ol class="probe-timeline weigh-timeline">
+      {% for w in weighs %}
+      <li>
+        <span class="mono temp">{{ w.netKg }}kg</span>
+        <span class="when">{{ w.weighedAt|date:"m-d H:i" }}</span>
+        <span class="who">{{ w.weigherName }}</span>
+      </li>
+      {% empty %}
+      <li class="empty">尚无称重 — 出胶灶收灶须累计净重 ≥ 半额</li>
+      {% endfor %}
+    </ol>
+    <p class="hint">登记称重请至班次条「称」· 仅出胶相位可称，累计不得超到货量。</p>
   </section>
 
   <section class="drawer-block">
@@ -72,7 +96,7 @@
 
   <section class="drawer-block">
     <h3>切换相位</h3>
-    <p class="hint">进入「出胶」须当前值守至少一条探针 ≤95℃。</p>
+    <p class="hint">进入「出胶」须当前值守至少一条探针 ≤95℃；出胶灶回冷灶须走「收灶」过称重联锁。</p>
     <form method="post" action="{% url 'change_phase' hearth.pk %}"
           class="stack-form"
           hx-post="{% url 'change_phase' hearth.pk %}"

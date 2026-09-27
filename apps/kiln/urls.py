@@ -10,5 +10,7 @@ urlpatterns = [
     path("hearth/<int:pk>/probe/", views.add_probe, name="add_probe"),
     path("hearth/<int:pk>/open-run/", views.open_run, name="open_run"),
     path("hearth/<int:pk>/close-run/", views.close_run, name="close_run"),
+    path("hearth/<int:pk>/weigh/", views.add_weigh, name="add_weigh"),
+    path("weighing/", views.weigh_desk, name="weigh_desk"),
     path("resin-lots/", views.resin_lot_feed, name="resin_lot_feed"),
 ]

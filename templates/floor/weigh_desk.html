@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}出胶称重{% endblock %}
+{% block content %}
+<section class="feed-head">
+  <div>
+    <h1>出胶称重台</h1>
+    <p class="board-sub">仅出胶相位可称 · 累计不得超到货量 · 收灶须累计 ≥ 到货一半（半额口径）</p>
+  </div>
+  <a class="back-link" href="{% url 'home' %}">← 回值守看板</a>
+</section>
+
+<div class="weigh-grid">
+  {% for c in cards %}
+  <article class="weigh-card">
+    <h2>{{ c.hearth.tag }}</h2>
+    <p class="lot-line">过道 {{ c.hearth.lane }} · {{ c.run.resinLot.lotCode }} · 到货 {{ c.run.resinLot.arrivalKg }} kg</p>
+
+    <div class="weigh-nums">
+      <div class="cell">
+        <div class="lab">累计净重</div>
+        <div class="val mono">{{ c.total }} kg</div>
+      </div>
+      <div class="cell">
+        <div class="lab">剩余可称</div>
+        <div class="val mono">{{ c.remaining }} kg</div>
+      </div>
+      <div class="cell">
+        <div class="lab">半额门槛</div>
+        <div class="val mono">{{ c.half }} kg</div>
+      </div>
+    </div>
+
+    <ol class="probe-timeline weigh-timeline">
+      {% for w in c.weighs %}
+      <li>
+        <span class="mono temp">{{ w.netKg }}kg</span>
+        <span class="when">{{ w.weighedAt|date:"m-d H:i" }}</span>
+        <span class="who">{{ w.weigherName }}</span>
+      </li>
+      {% empty %}
+      <li class="empty">尚无称重 — 收灶前须至少一条且累计 ≥ 半额</li>
+      {% endfor %}
+    </ol>
+
+    <form method="post" action="{% url 'add_weigh' c.hearth.pk %}" class="stack-form">
+      {% csrf_token %}
+      {{ c.form.as_p }}
+      <button type="submit" class="btn-ember">登记称重</button>
+    </form>
+  </article>
+  {% empty %}
+  <p class="board-empty">当前没有出胶相位的灶台 — 相位切到「出胶」后方可登记称重。</p>
+  {% endfor %}
+</div>
+{% endblock %}
