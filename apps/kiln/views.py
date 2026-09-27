@@ -8,9 +8,21 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 
-from .forms import OpenCookRunForm, PhaseChangeForm, ResinLotForm, SoftPointProbeForm
-from .models import CookRun, FireHearth, ResinLot
-from .services.floor_rules import change_hearth_phase
+from .forms import (
+    DrawWeighingForm,
+    OpenCookRunForm,
+    PhaseChangeForm,
+    ResinLotForm,
+    SoftPointProbeForm,
+)
+from .models import CookRun, DrawWeighing, FireHearth, ResinLot
+from .services.floor_rules import (
+    change_hearth_phase,
+    close_run_to_cold,
+    draw_weigh_summary,
+    open_weighings,
+    register_draw_weighing,
+)
 
 
 def _wants_htmx(request):
@@ -48,12 +60,23 @@ def _board_context():
 def _drawer_context(hearth):
     open_run = hearth.open_run()
     probes = []
+    weigh_summary = None
+    weighings = []
     if open_run:
         probes = list(open_run.probes.order_by("-sampledAt", "-id"))
+        weigh_summary = draw_weigh_summary(hearth, open_run)
+        weighings = list(
+            open_weighings(hearth, open_run).order_by("-weighedAt", "-id")
+        )
+    can_weigh = open_run is not None and hearth.phase == FireHearth.PHASE_DRAWING
     return {
         "hearth": hearth,
         "open_run": open_run,
         "probes": probes,
+        "weigh_summary": weigh_summary,
+        "weighings": weighings,
+        "can_weigh": can_weigh,
+        "weigh_form": DrawWeighingForm() if can_weigh else None,
         "phase_form": PhaseChangeForm(hearth=hearth),
         "probe_form": SoftPointProbeForm() if open_run else None,
         "open_run_form": OpenCookRunForm(hearth=hearth) if open_run is None else None,
@@ -144,6 +167,31 @@ def add_probe(request, pk):
 
 @login_required
 @require_POST
+def add_weighing(request, pk):
+    hearth = get_object_or_404(FireHearth, pk=pk)
+    form = DrawWeighingForm(request.POST)
+    if form.is_valid():
+        try:
+            weighing = register_draw_weighing(hearth, **form.cleaned_data)
+            messages.success(
+                request,
+                f"已登记称重 {weighing.netKg} kg（司秤 {weighing.weigherName}）",
+            )
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+    else:
+        messages.error(request, "称重登记失败，请检查输入")
+
+    if _wants_htmx(request):
+        hearth.refresh_from_db()
+        resp = render(request, "floor/_drawer.html", _drawer_context(hearth))
+        resp["HX-Trigger"] = "floor-refresh"
+        return resp
+    return redirect(f"/?hearth={pk}")
+
+
+@login_required
+@require_POST
 def open_run(request, pk):
     hearth = get_object_or_404(FireHearth, pk=pk)
     form = OpenCookRunForm(request.POST, hearth=hearth)
@@ -173,14 +221,11 @@ def open_run(request, pk):
 @require_POST
 def close_run(request, pk):
     hearth = get_object_or_404(FireHearth, pk=pk)
-    open_run = hearth.open_run()
-    if open_run is None:
-        messages.error(request, "没有进行中的值守可收灶")
+    try:
+        close_run_to_cold(hearth)
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
     else:
-        open_run.closedAt = timezone.now()
-        open_run.save(update_fields=["closedAt"])
-        hearth.phase = FireHearth.PHASE_COLD
-        hearth.save(update_fields=["phase"])
         messages.success(request, "值守已收灶，灶台回冷灶")
 
     if _wants_htmx(request):
@@ -209,3 +254,9 @@ def resin_lot_feed(request):
 
     lots = ResinLot.objects.all()[:40]
     return render(request, "resin/feed.html", {"lots": lots, "form": form})
+
+
+@login_required
+def weighing_feed(request):
+    weighings = DrawWeighing.objects.select_related("hearth")[:60]
+    return render(request, "weighing/feed.html", {"weighings": weighings})

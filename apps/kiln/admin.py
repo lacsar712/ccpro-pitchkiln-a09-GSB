@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import CookRun, FireHearth, ResinLot, SoftPointProbe
+from .models import CookRun, DrawWeighing, FireHearth, ResinLot, SoftPointProbe
 
 
 @admin.register(ResinLot)
@@ -34,3 +34,10 @@ class CookRunAdmin(admin.ModelAdmin):
 class SoftPointProbeAdmin(admin.ModelAdmin):
     list_display = ("id", "run", "sampledAt", "softPointC", "samplerName")
     search_fields = ("samplerName",)
+
+
+@admin.register(DrawWeighing)
+class DrawWeighingAdmin(admin.ModelAdmin):
+    list_display = ("id", "hearth", "weighedAt", "netKg", "weigherName")
+    list_filter = ("hearth",)
+    search_fields = ("weigherName", "hearth__tag")

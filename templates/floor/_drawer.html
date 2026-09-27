@@ -24,6 +24,7 @@
           hx-swap="innerHTML">
       {% csrf_token %}
       <button type="submit" class="btn-ghost">收灶回冷灶</button>
+      <p class="hint">收灶须至少一条出胶称重，且累计净重达半额口径。</p>
     </form>
   </section>
 
@@ -53,6 +54,45 @@
       {{ probe_form.as_p }}
       <button type="submit" class="btn-ember">写入探针</button>
     </form>
+  </section>
+
+  <section class="drawer-block">
+    <h3>出胶称重</h3>
+    <dl class="kv">
+      <dt>累计净重</dt><dd class="mono">{{ weigh_summary.totalKg }} kg</dd>
+      <dt>到货量</dt><dd class="mono">{{ weigh_summary.arrivalKg }} kg</dd>
+      <dt>半额收灶线</dt><dd class="mono">{{ weigh_summary.requiredKg }} kg</dd>
+      <dt>剩余可称</dt><dd class="mono">{{ weigh_summary.remainingKg }} kg</dd>
+    </dl>
+    {% if weigh_summary.ready %}
+    <p class="hint">已达半额口径（≥ 到货量一半），可收灶回冷灶。</p>
+    {% else %}
+    <p class="hint">未达半额口径（≥ 到货量一半），不得收灶。</p>
+    {% endif %}
+    <ol class="probe-timeline">
+      {% for w in weighings %}
+      <li class="ok">
+        <span class="mono temp">{{ w.netKg }}kg</span>
+        <span class="when">{{ w.weighedAt|date:"m-d H:i" }}</span>
+        <span class="who">{{ w.weigherName }}</span>
+      </li>
+      {% empty %}
+      <li class="empty">尚无称重 — 收灶前须至少一条且累计达半额</li>
+      {% endfor %}
+    </ol>
+    {% if can_weigh %}
+    <form method="post" action="{% url 'add_weighing' hearth.pk %}"
+          class="stack-form"
+          hx-post="{% url 'add_weighing' hearth.pk %}"
+          hx-target="#hearth-drawer"
+          hx-swap="innerHTML">
+      {% csrf_token %}
+      {{ weigh_form.as_p }}
+      <button type="submit" class="btn-ember">登记称重</button>
+    </form>
+    {% else %}
+    <p class="hint">仅出胶相位可登记称重。</p>
+    {% endif %}
   </section>
   {% else %}
   <section class="drawer-block">

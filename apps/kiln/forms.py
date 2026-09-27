@@ -1,7 +1,7 @@
 from django import forms
 from django.utils import timezone
 
-from .models import CookRun, FireHearth, ResinLot, SoftPointProbe
+from .models import CookRun, DrawWeighing, FireHearth, ResinLot, SoftPointProbe
 from .services.floor_rules import assert_can_enter_drawing
 
 
@@ -73,6 +73,32 @@ class SoftPointProbeForm(forms.ModelForm):
         ]
         if not self.is_bound and not (self.instance and self.instance.pk):
             self.initial["sampledAt"] = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
+
+
+class DrawWeighingForm(forms.ModelForm):
+    class Meta:
+        model = DrawWeighing
+        fields = ["weighedAt", "netKg", "weigherName"]
+        widgets = {
+            "weighedAt": forms.DateTimeInput(
+                attrs={"class": "field", "type": "datetime-local"},
+                format="%Y-%m-%dT%H:%M",
+            ),
+            "netKg": forms.NumberInput(
+                attrs={"class": "field", "step": "0.01", "min": "0.01"}
+            ),
+            "weigherName": forms.TextInput(attrs={"class": "field"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["weighedAt"].input_formats = [
+            "%Y-%m-%dT%H:%M",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M",
+        ]
+        if not self.is_bound and not (self.instance and self.instance.pk):
+            self.initial["weighedAt"] = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
 
 
 class OpenCookRunForm(forms.ModelForm):

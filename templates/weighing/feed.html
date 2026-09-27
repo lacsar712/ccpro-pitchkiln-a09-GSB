@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}出胶称重{% endblock %}
+{% block content %}
+<section class="feed-head">
+  <div>
+    <h1>出胶称重</h1>
+    <p class="board-sub">出胶相位称重流水 · 收灶须达半额口径（到货量 × 50%）</p>
+  </div>
+  <a class="back-link" href="{% url 'home' %}">← 回值守看板</a>
+</section>
+
+<ol class="lot-feed">
+  {% for w in weighings %}
+  <li class="lot-card">
+    <div class="lot-code mono">过道{{ w.hearth.lane }} · {{ w.hearth.tag }}</div>
+    <div class="lot-place">司秤 · {{ w.weigherName }}</div>
+    <div class="lot-meta">
+      <span class="mono">{{ w.netKg }} kg</span>
+      <span>{{ w.weighedAt|date:"Y-m-d H:i" }}</span>
+    </div>
+  </li>
+  {% empty %}
+  <li class="lot-card empty">暂无称重记录 — 出胶相位灶台自抽屉登记</li>
+  {% endfor %}
+</ol>
+{% endblock %}

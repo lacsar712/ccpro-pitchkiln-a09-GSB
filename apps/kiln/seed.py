@@ -7,7 +7,11 @@ from .models import CookRun, FireHearth, ResinLot, SoftPointProbe
 
 
 def ensure_seed_data():
-    """幂等种子：账号 + 来脂批 / 灶台 / 值守 / 探针。"""
+    """幂等种子：账号 + 来脂批 / 灶台 / 值守 / 探针。
+
+    出胶称重不留任何种子记录：坑火-西一（出胶相位）保持零称重，
+    用于演示收灶联锁 —— 无合格称重不得收灶回冷灶。
+    """
     User = get_user_model()
 
     if not User.objects.filter(username="admin").exists():
@@ -112,6 +116,7 @@ def ensure_seed_data():
         closedAt=None,
         targetSoftPointC=Decimal("86.00"),
     )
+    # 出胶灶但刻意不种任何 DrawWeighing：收灶联锁演示起点。
     SoftPointProbe.objects.create(
         run=run3,
         sampledAt=now - timezone.timedelta(hours=6),
